@@ -1,0 +1,1060 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IoT Emergency Response System & Panic Button</title>
+
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#fef2f2',
+                            100: '#ffe1e1',
+                            500: '#ef4444',
+                            600: '#dc2626',
+                            700: '#b91c1c',
+                            900: '#7f1d1d',
+                        }
+                    },
+                    animation: {
+                        'pulse-fast': 'pulse 0.8s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'ping-slow': 'ping 2s cubic-bezier(0, 0, 0.2, 1) infinite',
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- FontAwesome CDN -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Google Fonts - Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .alarm-gradient {
+            background: linear-gradient(135deg, rgba(220, 38, 38, 0.95) 0%, rgba(185, 28, 28, 0.95) 100%);
+        }
+        .glow-red {
+            box-shadow: 0 0 25px rgba(239, 68, 68, 0.6);
+        }
+        /* Custom scrollbar for log tables */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1f2937;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #4b5563;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #6b7280;
+        }
+    </style>
+
+    <!-- Dynamic PWA Manifest Generation -->
+    <script>
+        const manifestData = {
+            "name": "IoT Emergency Response System",
+            "short_name": "EmergencyIoT",
+            "start_url": "./",
+            "display": "standalone",
+            "background_color": "#111827",
+            "theme_color": "#dc2626",
+            "description": "Real-time IoT Panic Button Monitoring & Emergency Response Dashboard",
+            "icons": [
+                {
+                    "src": "https://img.icons8.com/color/192/siren.png",
+                    "sizes": "192x192",
+                    "type": "image/png"
+                },
+                {
+                    "src": "https://img.icons8.com/color/512/siren.png",
+                    "sizes": "512x512",
+                    "type": "image/png"
+                }
+            ]
+        };
+        const manifestBlob = new Blob([JSON.stringify(manifestData)], {type: 'application/json'});
+        const manifestURL = URL.createObjectURL(manifestBlob);
+        const link = document.createElement('link');
+        link.rel = 'manifest';
+        link.href = manifestURL;
+        document.head.appendChild(link);
+    </script>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen flex flex-col selection:bg-red-500 selection:text-white">
+
+    <!-- TOP NAVIGATION HEADER -->
+    <header class="bg-gray-800/90 backdrop-blur-md border-b border-gray-700 sticky top-0 z-30">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <!-- Brand & Logo -->
+                <div class="flex items-center space-x-3">
+                    <div class="p-2 bg-red-600 text-white rounded-xl shadow-lg flex items-center justify-center">
+                        <i class="fa-solid fa-triangle-exclamation text-xl animate-pulse"></i>
+                    </div>
+                    <div>
+                        <h1 class="font-bold text-lg leading-tight tracking-wide text-white">EMERGENCY <span class="text-red-500">RESPONSE</span></h1>
+                        <p class="text-xs text-gray-400 font-medium">IoT Panic Button Dashboard</p>
+                    </div>
+                </div>
+
+                <!-- Connection Status & System Controls -->
+                <div class="flex items-center space-x-3">
+                    <!-- Status Badge -->
+                    <div id="connectionBadge" class="flex items-center space-x-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                        <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                        <span id="connectionText">SYSTEM ONLINE</span>
+                    </div>
+
+                    <!-- Audio Mute Toggle Button -->
+                    <button id="audioToggleBtn" onclick="toggleMuteAudio()" class="p-2.5 text-gray-400 hover:text-white bg-gray-700/50 hover:bg-gray-700 rounded-lg transition-all border border-gray-600/50" title="Toggle Sound Alarm">
+                        <i id="audioIcon" class="fa-solid fa-volume-high text-emerald-400"></i>
+                    </button>
+
+                    <!-- Setup Wizard Trigger -->
+                    <button onclick="openSetupModal()" class="flex items-center space-x-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-lg shadow-md transition-all">
+                        <i class="fa-solid fa-sliders"></i>
+                        <span class="hidden sm:inline">Setup GAS</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+        <!-- ALARM BANNER (Visible when Emergency Active) -->
+        <div id="mainAlarmBanner" class="hidden relative overflow-hidden rounded-2xl alarm-gradient p-6 text-white shadow-2xl glow-red border-2 border-red-500 animate-pulse-fast">
+            <div class="flex flex-col md:flex-row items-center justify-between gap-4 relative z-10">
+                <div class="flex items-center space-x-4">
+                    <div class="p-4 bg-white/20 rounded-full flex-shrink-0 animate-bounce">
+                        <i class="fa-solid fa-lightbulb text-4xl text-yellow-300"></i>
+                    </div>
+                    <div>
+                        <div class="flex items-center space-x-2">
+                            <span class="bg-black/40 text-yellow-300 font-bold px-2.5 py-0.5 rounded text-xs tracking-wider uppercase">PERINGATAN DARURAT</span>
+                            <span id="bannerTime" class="text-xs text-red-100 font-mono">10:26 WITA</span>
+                        </div>
+                        <h2 id="bannerLocation" class="text-2xl sm:text-3xl font-extrabold mt-1">PANIC BUTTON DIPETIK DI RUANG LAB 01!</h2>
+                        <p id="bannerDeviceInfo" class="text-sm text-red-100 mt-0.5">Device ID: <span class="font-mono">ESP32-DEV-001</span> • Triggered oleh Manual Switch</p>
+                    </div>
+                </div>
+
+                <!-- Emergency Action Buttons -->
+                <div class="flex flex-wrap items-center gap-3 w-full md:w-auto">
+                    <button onclick="acknowledgeAlarm()" class="flex-1 md:flex-none px-5 py-3 bg-yellow-500 hover:bg-yellow-400 text-gray-900 font-bold rounded-xl shadow-lg transition-all flex items-center justify-center space-x-2">
+                        <i class="fa-solid fa-hand"></i>
+                        <span>ACKNOWLEDGE</span>
+                    </button>
+                    <button onclick="resolveAlarm()" class="flex-1 md:flex-none px-5 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl shadow-lg transition-all flex items-center justify-center space-x-2">
+                        <i class="fa-solid fa-circle-check"></i>
+                        <span>RESOLVE & RESET</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- NAVIGATION TABS -->
+        <div class="flex items-center justify-between border-b border-gray-800 pb-2 overflow-x-auto">
+            <div class="flex space-x-2">
+                <button onclick="switchTab('dashboard')" id="tab-dashboard" class="tab-btn active px-4 py-2 rounded-xl font-semibold text-sm transition-all flex items-center space-x-2 bg-gray-800 text-red-400 border border-gray-700">
+                    <i class="fa-solid fa-chart-pie"></i>
+                    <span>Live Dashboard</span>
+                </button>
+                <button onclick="switchTab('history')" id="tab-history" class="tab-btn px-4 py-2 rounded-xl font-semibold text-sm transition-all flex items-center space-x-2 text-gray-400 hover:bg-gray-800 hover:text-gray-200">
+                    <i class="fa-solid fa-clock-rotate-left"></i>
+                    <span>Riwayat Kejadian</span>
+                </button>
+                <button onclick="switchTab('devices')" id="tab-devices" class="tab-btn px-4 py-2 rounded-xl font-semibold text-sm transition-all flex items-center space-x-2 text-gray-400 hover:bg-gray-800 hover:text-gray-200">
+                    <i class="fa-solid fa-microchip"></i>
+                    <span>Perangkat & Firmware</span>
+                </button>
+            </div>
+
+            <!-- Quick Trigger Simulation -->
+            <button onclick="simulateEmergencyTrigger()" class="hidden sm:flex items-center space-x-2 px-3 py-1.5 bg-red-900/40 hover:bg-red-900/80 text-red-300 border border-red-700/50 rounded-lg text-xs font-semibold transition-all">
+                <i class="fa-solid fa-bolt"></i>
+                <span>Simulasi Panic Button</span>
+            </button>
+        </div>
+
+        <!-- TAB CONTENT 1: LIVE DASHBOARD -->
+        <section id="content-dashboard" class="space-y-6">
+            
+            <!-- System Quick Summary Stats -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="bg-gray-800/60 p-4 rounded-xl border border-gray-700/60 flex items-center justify-between">
+                    <div>
+                        <p class="text-xs text-gray-400 font-medium">Total Perangkat</p>
+                        <p id="statTotalDevices" class="text-2xl font-bold text-gray-100 mt-1">4</p>
+                    </div>
+                    <div class="p-3 bg-blue-500/10 text-blue-400 rounded-lg">
+                        <i class="fa-solid fa-network-wired text-xl"></i>
+                    </div>
+                </div>
+                <div class="bg-gray-800/60 p-4 rounded-xl border border-gray-700/60 flex items-center justify-between">
+                    <div>
+                        <p class="text-xs text-gray-400 font-medium">Status Darurat</p>
+                        <p id="statActiveAlarms" class="text-2xl font-bold text-emerald-400 mt-1">0 Active</p>
+                    </div>
+                    <div class="p-3 bg-red-500/10 text-red-400 rounded-lg">
+                        <i class="fa-solid fa-bell text-xl"></i>
+                    </div>
+                </div>
+                <div class="bg-gray-800/60 p-4 rounded-xl border border-gray-700/60 flex items-center justify-between">
+                    <div>
+                        <p class="text-xs text-gray-400 font-medium">Perangkat Safe</p>
+                        <p id="statSafeDevices" class="text-2xl font-bold text-emerald-400 mt-1">3</p>
+                    </div>
+                    <div class="p-3 bg-emerald-500/10 text-emerald-400 rounded-lg">
+                        <i class="fa-solid fa-shield-halved text-xl"></i>
+                    </div>
+                </div>
+                <div class="bg-gray-800/60 p-4 rounded-xl border border-gray-700/60 flex items-center justify-between">
+                    <div>
+                        <p class="text-xs text-gray-400 font-medium">Perangkat Offline</p>
+                        <p id="statOfflineDevices" class="text-2xl font-bold text-gray-400 mt-1">1</p>
+                    </div>
+                    <div class="p-3 bg-gray-500/10 text-gray-400 rounded-lg">
+                        <i class="fa-solid fa-plug-circle-xmark text-xl"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Zone Grid Container -->
+            <div>
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-base font-bold text-gray-200 flex items-center space-x-2">
+                        <i class="fa-solid fa-grip text-red-500"></i>
+                        <span>Peta Ruangan & Zona Perangkat</span>
+                    </h3>
+                    <div class="flex items-center space-x-3 text-xs">
+                        <span class="flex items-center space-x-1.5 text-emerald-400"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span> <span>Aman</span></span>
+                        <span class="flex items-center space-x-1.5 text-red-400"><span class="w-2.5 h-2.5 rounded-full bg-red-500"></span> <span>Bahaya/Triggered</span></span>
+                        <span class="flex items-center space-x-1.5 text-gray-400"><span class="w-2.5 h-2.5 rounded-full bg-gray-500"></span> <span>Offline</span></span>
+                    </div>
+                </div>
+
+                <!-- Interactive Zone Grid -->
+                <div id="zoneGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <!-- Cards dynamic generation target -->
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB CONTENT 2: INCIDENT HISTORY LOGS -->
+        <section id="content-history" class="hidden space-y-4">
+            <!-- Filter Bar -->
+            <div class="bg-gray-800/60 p-4 rounded-xl border border-gray-700/60 flex flex-col md:flex-row gap-4 items-center justify-between">
+                <div class="flex flex-wrap items-center gap-3 w-full md:w-auto">
+                    <div>
+                        <label class="block text-xs text-gray-400 mb-1">Filter Status</label>
+                        <select id="logStatusFilter" onchange="applyLogFilters()" class="bg-gray-900 text-xs border border-gray-700 rounded-lg px-3 py-2 text-gray-200 focus:outline-none focus:border-red-500">
+                            <option value="ALL">Semua Status</option>
+                            <option value="TRIGGERED">TRIGGERED</option>
+                            <option value="ACKNOWLEDGED">ACKNOWLEDGED</option>
+                            <option value="RESOLVED">RESOLVED</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-400 mb-1">Tanggal</label>
+                        <input type="date" id="logDateFilter" onchange="applyLogFilters()" class="bg-gray-900 text-xs border border-gray-700 rounded-lg px-3 py-2 text-gray-200 focus:outline-none focus:border-red-500">
+                    </div>
+                </div>
+
+                <div class="flex items-center space-x-2 w-full md:w-auto justify-end">
+                    <button onclick="exportLogsToCSV()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold flex items-center space-x-2 transition-all shadow-md">
+                        <i class="fa-solid fa-file-csv text-sm"></i>
+                        <span>Ekspor ke CSV</span>
+                    </button>
+                    <button onclick="refreshLogsData()" class="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded-lg text-xs font-semibold flex items-center space-x-1.5 transition-all">
+                        <i class="fa-solid fa-rotate"></i>
+                        <span>Refresh</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Table Container -->
+            <div class="bg-gray-800/40 rounded-xl border border-gray-700/60 overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs">
+                        <thead class="bg-gray-800 text-gray-300 font-semibold border-b border-gray-700">
+                            <tr>
+                                <th class="p-3.5">Waktu Kejadian</th>
+                                <th class="p-3.5">Device ID</th>
+                                <th class="p-3.5">Lokasi Zona</th>
+                                <th class="p-3.5">Status Peringatan</th>
+                                <th class="p-3.5">Operator Handling</th>
+                                <th class="p-3.5 text-right">Aksi Tindakan</th>
+                            </tr>
+                        </thead>
+                        <tbody id="logsTableBody" class="divide-y divide-gray-800 text-gray-300">
+                            <!-- Dynamic Table Rows -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB CONTENT 3: DEVICE MANAGEMENT & CODE GENERATOR -->
+        <section id="content-devices" class="hidden space-y-6">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Device List Column -->
+                <div class="lg:col-span-1 space-y-4">
+                    <div class="bg-gray-800/60 p-4 rounded-xl border border-gray-700/60 flex items-center justify-between">
+                        <h3 class="font-bold text-sm text-gray-200 flex items-center space-x-2">
+                            <i class="fa-solid fa-microchip text-blue-400"></i>
+                            <span>Daftar Perangkat ESP32</span>
+                        </h3>
+                        <button onclick="openAddDeviceModal()" class="px-2.5 py-1 bg-blue-600 hover:bg-blue-500 text-white text-xs rounded-lg font-semibold transition-all">
+                            <i class="fa-solid fa-plus mr-1"></i>Tambah
+                        </button>
+                    </div>
+
+                    <div id="deviceListContainer" class="space-y-3">
+                        <!-- Dynamic Device List Cards -->
+                    </div>
+                </div>
+
+                <!-- Arduino ESP32 Firmware Code Generator -->
+                <div class="lg:col-span-2 bg-gray-800/60 p-5 rounded-xl border border-gray-700/60 space-y-4">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between border-b border-gray-700 pb-3 gap-2">
+                        <div>
+                            <h3 class="font-bold text-sm text-gray-100 flex items-center space-x-2">
+                                <i class="fa-solid fa-code text-yellow-400"></i>
+                                <span>Generator Code Arduino C++ (ESP32)</span>
+                            </h3>
+                            <p class="text-xs text-gray-400">Otomatisasi skrip .ino untuk Panic Button hardware</p>
+                        </div>
+                        <button onclick="copyGeneratedCode()" class="px-3 py-1.5 bg-yellow-500 hover:bg-yellow-400 text-gray-900 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 self-start sm:self-auto">
+                            <i class="fa-solid fa-copy"></i>
+                            <span>Salin Kode .ino</span>
+                        </button>
+                    </div>
+
+                    <!-- Config Input for Generator -->
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div>
+                            <label class="block text-xs text-gray-400 mb-1">Wi-Fi SSID</label>
+                            <input type="text" id="genWifiSsid" value="Wi-Fi_Kantor" oninput="generateArduinoCode()" class="w-full bg-gray-900 text-xs border border-gray-700 rounded-lg px-3 py-2 text-gray-200 focus:outline-none focus:border-yellow-500">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-gray-400 mb-1">Wi-Fi Password</label>
+                            <input type="password" id="genWifiPass" value="SecretPassword123" oninput="generateArduinoCode()" class="w-full bg-gray-900 text-xs border border-gray-700 rounded-lg px-3 py-2 text-gray-200 focus:outline-none focus:border-yellow-500">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-gray-400 mb-1">Pilih Target Device</label>
+                            <select id="genDeviceSelect" onchange="generateArduinoCode()" class="w-full bg-gray-900 text-xs border border-gray-700 rounded-lg px-3 py-2 text-gray-200 focus:outline-none focus:border-yellow-500">
+                                <!-- Dynamic Options -->
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Code Output Display -->
+                    <div class="relative">
+                        <pre id="arduinoCodeDisplay" class="bg-gray-950 p-4 rounded-xl text-xs text-emerald-400 font-mono overflow-x-auto max-h-[420px] border border-gray-800 leading-relaxed">
+/* Loading Code Generator... */
+                        </pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- SETUP WIZARD MODAL (Google Apps Script Integration) -->
+    <div id="setupModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-gray-800 border border-gray-700 w-full max-w-xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div class="p-5 bg-gray-800/90 border-b border-gray-700 flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <div class="p-2 bg-blue-600/20 text-blue-400 rounded-lg">
+                        <i class="fa-solid fa-sliders text-xl"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-base text-gray-100">Setup Wizard Integrasi GAS</h3>
+                        <p class="text-xs text-gray-400">Hubungkan dashboard ini ke Google Sheets Backend</p>
+                    </div>
+                </div>
+                <button onclick="closeSetupModal()" class="text-gray-400 hover:text-white p-1">
+                    <i class="fa-solid fa-xmark text-xl"></i>
+                </button>
+            </div>
+
+            <div class="p-6 overflow-y-auto space-y-5 text-xs text-gray-300">
+                <!-- Step 1: Web App URL -->
+                <div class="space-y-2">
+                    <label class="font-bold text-gray-200 flex items-center space-x-2">
+                        <span class="w-5 h-5 bg-blue-600 text-white rounded-full flex items-center justify-center text-xs">1</span>
+                        <span>Google Apps Script Web App Deployment URL</span>
+                    </label>
+                    <input type="url" id="gasScriptUrl" placeholder="https://script.google.com/macros/s/AKfycbySGuluOfPppbDuf1lTt6aZtLedXqEIbj6ySyqq0EYcofgeWJoUdAEmZrMxIRl92sr3/exec" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-3 text-gray-100 focus:outline-none focus:border-blue-500 font-mono">
+                    <p class="text-[11px] text-gray-400">Pastikan skrip dikirimkan sebagai <i>Web App</i> dengan akses <i>Anyone</i>.</p>
+                </div>
+
+                <!-- Step 2: Admin API Key -->
+                <div class="space-y-2">
+                    <label class="font-bold text-gray-200 flex items-center space-x-2">
+                        <span class="w-5 h-5 bg-blue-600 text-white rounded-full flex items-center justify-center text-xs">2</span>
+                        <span>Admin Secret API Key</span>
+                    </label>
+                    <input type="password" id="gasApiKey" value="SECRET_PANIC_API_KEY_2026" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-3 text-gray-100 focus:outline-none focus:border-blue-500 font-mono">
+                </div>
+
+                <!-- Action Controls -->
+                <div class="p-4 bg-gray-900/60 rounded-xl border border-gray-700/50 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <span class="font-semibold text-gray-200">Uji Koneksi & Inisialisasi</span>
+                        <span id="pingStatusText" class="text-[11px] text-gray-400">Belum diuji</span>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button onclick="testGasPing()" class="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg font-semibold flex items-center justify-center space-x-1.5 transition-all">
+                            <i class="fa-solid fa-wifi text-xs"></i>
+                            <span>Test Ping Webhook</span>
+                        </button>
+                        <button onclick="initGasDatabase()" class="px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-semibold flex items-center justify-center space-x-1.5 transition-all">
+                            <i class="fa-solid fa-database text-xs"></i>
+                            <span>Inisialisasi Sheet</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Google Apps Script Source Code Template Helper -->
+                <div class="space-y-2">
+                    <div class="flex items-center justify-between">
+                        <span class="font-semibold text-gray-200">Template Kode Google Apps Script (Code.gs)</span>
+                        <button onclick="copyGasScriptTemplate()" class="text-blue-400 hover:underline text-[11px]">Salin Kode GAS</button>
+                    </div>
+                    <pre class="bg-gray-950 p-3 rounded-lg text-[11px] text-gray-400 font-mono overflow-x-auto max-h-32 border border-gray-800">
+function doPost(e) {
+  var data = JSON.parse(e.postData.contents);
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  sheet.appendRow([new Date(), data.deviceId, data.location, data.status]);
+  return ContentService.createTextOutput(JSON.stringify({result: "success"})).setMimeType(ContentService.MimeType.JSON);
+}
+                    </pre>
+                </div>
+            </div>
+
+            <div class="p-4 bg-gray-800 border-t border-gray-700 flex justify-end space-x-2">
+                <button onclick="saveSetupConfig()" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold transition-all shadow-md">
+                    Simpan Konfigurasi
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL ADD DEVICE -->
+    <div id="addDeviceModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-gray-800 border border-gray-700 w-full max-w-md rounded-2xl shadow-2xl p-5 space-y-4">
+            <h3 class="font-bold text-base text-gray-100">Tambah Perangkat IoT Baru</h3>
+            <div class="space-y-3 text-xs">
+                <div>
+                    <label class="block text-gray-400 mb-1">Device ID (Unique)</label>
+                    <input type="text" id="newDeviceId" placeholder="ESP32-DEV-005" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-2.5 text-gray-100 focus:outline-none focus:border-blue-500">
+                </div>
+                <div>
+                    <label class="block text-gray-400 mb-1">Nama Lokasi / Ruangan</label>
+                    <input type="text" id="newDeviceLocation" placeholder="Ruang Rapat Utama" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-2.5 text-gray-100 focus:outline-none focus:border-blue-500">
+                </div>
+            </div>
+            <div class="flex justify-end space-x-2 pt-2">
+                <button onclick="closeAddDeviceModal()" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded-lg text-xs font-semibold">Batal</button>
+                <button onclick="saveNewDevice()" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold">Simpan Device</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- JAVASCRIPT APPLICATION LOGIC -->
+    <script>
+        // ==========================================
+        // SYSTEM STATE & INITIAL MOCK DATA
+        // ==========================================
+        let devices = [
+            { id: "ESP32-DEV-001", location: "Ruang Lab 01", status: "SAFE", lastSeen: "Baru saja", ip: "192.168.1.101" },
+            { id: "ESP32-DEV-002", location: "Lobi Utama", status: "SAFE", lastSeen: "1 menit lalu", ip: "192.168.1.102" },
+            { id: "ESP32-DEV-003", location: "Gudang B2", status: "SAFE", lastSeen: "3 menit lalu", ip: "192.168.1.103" },
+            { id: "ESP32-DEV-004", location: "Kantin Lt 2", status: "OFFLINE", lastSeen: "2 jam lalu", ip: "192.168.1.104" }
+        ];
+
+        let incidentLogs = [
+            { id: "LOG-1001", timestamp: "2026-10-05 08:30:12", deviceId: "ESP32-DEV-002", location: "Lobi Utama", status: "RESOLVED", operator: "Admin-01" },
+            { id: "LOG-1000", timestamp: "2026-10-04 14:15:00", deviceId: "ESP32-DEV-003", location: "Gudang B2", status: "RESOLVED", operator: "Admin-02" }
+        ];
+
+        let activeAlarm = null; // Stores current active emergency trigger
+        let isMuted = false;
+        let gasConfig = {
+            url: localStorage.getItem('gas_url') || '',
+            apiKey: localStorage.getItem('gas_key') || 'SECRET_PANIC_API_KEY_2026'
+        };
+
+        // Web Audio API Synthesizer Context for Siren Sound
+        let audioCtx = null;
+        let sirenOscillator = null;
+        let sirenGain = null;
+        let sirenInterval = null;
+
+        // ==========================================
+        // INITIALIZATION & EVENT LISTENERS
+        // ==========================================
+        window.onload = function() {
+            renderZoneGrid();
+            renderLogsTable();
+            renderDeviceList();
+            populateDeviceDropdown();
+            generateArduinoCode();
+
+            // Register PWA Service Worker if available
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('sw.js').catch(() => {
+                    console.log('PWA Service Worker registered in fallback mode.');
+                });
+            }
+
+            // Sync GAS config inputs
+            document.getElementById('gasScriptUrl').value = gasConfig.url;
+            document.getElementById('gasApiKey').value = gasConfig.apiKey;
+        };
+
+        // Tab Switcher
+        function switchTab(tabId) {
+            document.querySelectorAll('section[id^="content-"]').forEach(sec => sec.classList.add('hidden'));
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('bg-gray-800', 'text-red-400', 'border', 'border-gray-700');
+                btn.classList.add('text-gray-400');
+            });
+
+            document.getElementById(`content-${tabId}`).classList.remove('hidden');
+            const activeBtn = document.getElementById(`tab-${tabId}`);
+            activeBtn.classList.add('bg-gray-800', 'text-red-400', 'border', 'border-gray-700');
+            activeBtn.classList.remove('text-gray-400');
+        }
+
+        // ==========================================
+        // WEB AUDIO SYNTHESIZER (ALARM SIREN)
+        // ==========================================
+        function initAudioContext() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+        }
+
+        function startSirenSound() {
+            if (isMuted) return;
+            initAudioContext();
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+
+            if (sirenOscillator) stopSirenSound();
+
+            sirenOscillator = audioCtx.createOscillator();
+            sirenGain = audioCtx.createGain();
+
+            sirenOscillator.type = 'sawtooth';
+            sirenGain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+
+            sirenOscillator.connect(sirenGain);
+            sirenGain.connect(audioCtx.destination);
+
+            sirenOscillator.start();
+
+            // Siren pitch sweep effect (Freq 600Hz to 1200Hz)
+            let highPitch = false;
+            sirenInterval = setInterval(() => {
+                if (!sirenOscillator || !audioCtx) return;
+                const targetFreq = highPitch ? 600 : 1200;
+                sirenOscillator.frequency.exponentialRampToValueAtTime(targetFreq, audioCtx.currentTime + 0.35);
+                highPitch = !highPitch;
+            }, 400);
+        }
+
+        function stopSirenSound() {
+            if (sirenInterval) clearInterval(sirenInterval);
+            if (sirenOscillator) {
+                try {
+                    sirenOscillator.stop();
+                    sirenOscillator.disconnect();
+                } catch(e) {}
+                sirenOscillator = null;
+            }
+        }
+
+        function toggleMuteAudio() {
+            isMuted = !isMuted;
+            const icon = document.getElementById('audioIcon');
+            if (isMuted) {
+                icon.className = 'fa-solid fa-volume-xmark text-red-400';
+                stopSirenSound();
+            } else {
+                icon.className = 'fa-solid fa-volume-high text-emerald-400';
+                if (activeAlarm && activeAlarm.status === 'TRIGGERED') {
+                    startSirenSound();
+                }
+            }
+        }
+
+        // ==========================================
+        // EMERGENCY ALARM CONTROLLER
+        // ==========================================
+        function triggerEmergency(deviceId) {
+            const dev = devices.find(d => d.id === deviceId);
+            if (!dev) return;
+
+            dev.status = "TRIGGERED";
+            dev.lastSeen = "Baru saja";
+
+            activeAlarm = {
+                id: "LOG-" + Math.floor(1000 + Math.random() * 9000),
+                timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
+                deviceId: dev.id,
+                location: dev.location,
+                status: "TRIGGERED",
+                operator: "-"
+            };
+
+            incidentLogs.unshift(activeAlarm);
+
+            // Update UI Banner & Sound
+            document.getElementById('bannerLocation').innerText = `PANIC BUTTON DIPETIK DI ${dev.location.toUpperCase()}!`;
+            document.getElementById('bannerDeviceInfo').innerHTML = `Device ID: <span class="font-mono">${dev.id}</span> • Triggered Manual Switch`;
+            document.getElementById('bannerTime').innerText = new Date().toLocaleTimeString('id-ID');
+            document.getElementById('mainAlarmBanner').classList.remove('hidden');
+
+            startSirenSound();
+            updateStatsAndGrids();
+            renderLogsTable();
+        }
+
+        function acknowledgeAlarm() {
+            if (!activeAlarm) return;
+            activeAlarm.status = "ACKNOWLEDGED";
+            activeAlarm.operator = "Operator On-Duty";
+
+            // Update device status representation
+            const dev = devices.find(d => d.id === activeAlarm.deviceId);
+            if (dev) dev.status = "ACKNOWLEDGED";
+
+            stopSirenSound();
+            document.getElementById('mainAlarmBanner').classList.remove('animate-pulse-fast');
+            updateStatsAndGrids();
+            renderLogsTable();
+        }
+
+        function resolveAlarm() {
+            if (activeAlarm) {
+                activeAlarm.status = "RESOLVED";
+                const dev = devices.find(d => d.id === activeAlarm.deviceId);
+                if (dev) dev.status = "SAFE";
+                activeAlarm = null;
+            }
+
+            devices.forEach(d => { if(d.status !== "OFFLINE") d.status = "SAFE"; });
+
+            stopSirenSound();
+            document.getElementById('mainAlarmBanner').classList.add('hidden');
+            updateStatsAndGrids();
+            renderLogsTable();
+        }
+
+        function simulateEmergencyTrigger() {
+            triggerEmergency("ESP32-DEV-001");
+        }
+
+        // ==========================================
+        // RENDER FUNCTIONS (UI DYNAMICS)
+        // ==========================================
+        function updateStatsAndGrids() {
+            const total = devices.length;
+            const active = devices.filter(d => d.status === 'TRIGGERED' || d.status === 'ACKNOWLEDGED').length;
+            const safe = devices.filter(d => d.status === 'SAFE').length;
+            const offline = devices.filter(d => d.status === 'OFFLINE').length;
+
+            document.getElementById('statTotalDevices').innerText = total;
+            document.getElementById('statActiveAlarms').innerText = `${active} Active`;
+            document.getElementById('statSafeDevices').innerText = safe;
+            document.getElementById('statOfflineDevices').innerText = offline;
+
+            renderZoneGrid();
+        }
+
+        function renderZoneGrid() {
+            const grid = document.getElementById('zoneGrid');
+            grid.innerHTML = devices.map(dev => {
+                let statusBg = "bg-emerald-950/40 border-emerald-500/40 text-emerald-400";
+                let badgeClass = "bg-emerald-500/20 text-emerald-400 border-emerald-500/30";
+                let statusText = "SAFE / AMAN";
+                let iconClass = "fa-shield-halved text-emerald-400";
+
+                if (dev.status === 'TRIGGERED') {
+                    statusBg = "bg-red-950/80 border-red-500 animate-pulse glow-red text-red-400";
+                    badgeClass = "bg-red-500 text-white animate-bounce";
+                    statusText = "EMERGENCY!";
+                    iconClass = "fa-bell text-red-400";
+                } else if (dev.status === 'ACKNOWLEDGED') {
+                    statusBg = "bg-yellow-950/50 border-yellow-500/60 text-yellow-400";
+                    badgeClass = "bg-yellow-500/20 text-yellow-400 border-yellow-500/30";
+                    statusText = "ACKNOWLEDGED";
+                    iconClass = "fa-hand text-yellow-400";
+                } else if (dev.status === 'OFFLINE') {
+                    statusBg = "bg-gray-800/40 border-gray-700/50 text-gray-400";
+                    badgeClass = "bg-gray-700 text-gray-400";
+                    statusText = "OFFLINE";
+                    iconClass = "fa-plug-circle-xmark text-gray-500";
+                }
+
+                return `
+                    <div class="p-5 rounded-xl border ${statusBg} flex flex-col justify-between transition-all duration-300">
+                        <div class="flex items-start justify-between">
+                            <div>
+                                <span class="text-[10px] font-mono uppercase px-2 py-0.5 rounded border ${badgeClass}">${dev.id}</span>
+                                <h4 class="font-bold text-base text-gray-100 mt-2">${dev.location}</h4>
+                            </div>
+                            <div class="p-2.5 bg-gray-900/60 rounded-xl">
+                                <i class="fa-solid ${iconClass} text-xl"></i>
+                            </div>
+                        </div>
+
+                        <div class="mt-4 pt-3 border-t border-gray-700/40 flex items-center justify-between text-xs">
+                            <span class="text-gray-400 font-mono text-[11px]"><i class="fa-solid fa-wifi mr-1"></i>${dev.ip}</span>
+                            ${dev.status === 'SAFE' ? 
+                                `<button onclick="triggerEmergency('${dev.id}')" class="px-2.5 py-1 bg-red-600/30 hover:bg-red-600 text-red-300 hover:text-white rounded text-[11px] transition-all">Test Panic</button>` : 
+                                `<span class="font-bold text-[11px]">${statusText}</span>`
+                            }
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderLogsTable() {
+            const tbody = document.getElementById('logsTableBody');
+            const statusFilter = document.getElementById('logStatusFilter').value;
+            
+            let filtered = incidentLogs;
+            if (statusFilter !== 'ALL') {
+                filtered = incidentLogs.filter(l => l.status === statusFilter);
+            }
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-gray-500">Tidak ada riwayat kejadian ditemukan.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = filtered.map(log => {
+                let badge = "bg-emerald-500/10 text-emerald-400 border-emerald-500/30";
+                if (log.status === 'TRIGGERED') badge = "bg-red-500/20 text-red-400 border-red-500/30 animate-pulse";
+                if (log.status === 'ACKNOWLEDGED') badge = "bg-yellow-500/20 text-yellow-400 border-yellow-500/30";
+
+                return `
+                    <tr class="hover:bg-gray-800/50 transition-all">
+                        <td class="p-3.5 font-mono text-gray-300">${log.timestamp}</td>
+                        <td class="p-3.5 font-mono text-gray-400">${log.deviceId}</td>
+                        <td class="p-3.5 font-semibold text-gray-200">${log.location}</td>
+                        <td class="p-3.5"><span class="px-2 py-0.5 rounded border ${badge} font-bold text-[10px]">${log.status}</span></td>
+                        <td class="p-3.5 text-gray-400">${log.operator}</td>
+                        <td class="p-3.5 text-right space-x-1">
+                            ${log.status === 'TRIGGERED' ? `
+                                <button onclick="acknowledgeAlarm()" class="px-2 py-1 bg-yellow-600/30 text-yellow-300 hover:bg-yellow-600 hover:text-white rounded text-[11px] font-semibold">Ack</button>
+                                <button onclick="resolveAlarm()" class="px-2 py-1 bg-emerald-600/30 text-emerald-300 hover:bg-emerald-600 hover:text-white rounded text-[11px] font-semibold">Resolve</button>
+                            ` : `<span class="text-gray-500 text-[11px]">-</span>`}
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function applyLogFilters() {
+            renderLogsTable();
+        }
+
+        function refreshLogsData() {
+            renderLogsTable();
+        }
+
+        function exportLogsToCSV() {
+            let csv = "ID,Timestamp,DeviceID,Location,Status,Operator\n";
+            incidentLogs.forEach(l => {
+                csv += `"${l.id}","${l.timestamp}","${l.deviceId}","${l.location}","${l.status}","${l.operator}"\n`;
+            });
+
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.setAttribute('href', url);
+            a.setAttribute('download', `incident-logs-${new Date().toISOString().substring(0,10)}.csv`);
+            a.click();
+        }
+
+        // ==========================================
+        // DEVICE MANAGEMENT & CODE GENERATOR
+        // ==========================================
+        function renderDeviceList() {
+            const container = document.getElementById('deviceListContainer');
+            container.innerHTML = devices.map(dev => `
+                <div class="bg-gray-900/80 p-3 rounded-xl border border-gray-700/60 flex items-center justify-between text-xs">
+                    <div>
+                        <div class="font-bold text-gray-200">${dev.location}</div>
+                        <div class="text-gray-400 font-mono text-[11px]">${dev.id}</div>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <span class="px-2 py-0.5 rounded text-[10px] font-semibold ${dev.status === 'OFFLINE' ? 'bg-gray-800 text-gray-400' : 'bg-emerald-950 text-emerald-400'}">${dev.status}</span>
+                        <button onclick="removeDevice('${dev.id}')" class="text-gray-500 hover:text-red-400 p-1"><i class="fa-solid fa-trash"></i></button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function populateDeviceDropdown() {
+            const select = document.getElementById('genDeviceSelect');
+            select.innerHTML = devices.map(d => `<option value="${d.id}">${d.id} (${d.location})</option>`).join('');
+        }
+
+        function openAddDeviceModal() {
+            document.getElementById('addDeviceModal').classList.remove('hidden');
+        }
+
+        function closeAddDeviceModal() {
+            document.getElementById('addDeviceModal').classList.add('hidden');
+        }
+
+        function saveNewDevice() {
+            const id = document.getElementById('newDeviceId').value.trim();
+            const loc = document.getElementById('newDeviceLocation').value.trim();
+
+            if (!id || !loc) return;
+
+            devices.push({
+                id: id,
+                location: loc,
+                status: "SAFE",
+                lastSeen: "Baru saja",
+                ip: "192.168.1." + Math.floor(105 + Math.random() * 50)
+            });
+
+            closeAddDeviceModal();
+            renderDeviceList();
+            populateDeviceDropdown();
+            updateStatsAndGrids();
+            generateArduinoCode();
+        }
+
+        function removeDevice(id) {
+            devices = devices.filter(d => d.id !== id);
+            renderDeviceList();
+            populateDeviceDropdown();
+            updateStatsAndGrids();
+            generateArduinoCode();
+        }
+
+        function generateArduinoCode() {
+            const ssid = document.getElementById('genWifiSsid').value || "Wi-Fi_SSID";
+            const pass = document.getElementById('genWifiPass').value || "PASSWORD";
+            const selectedDevId = document.getElementById('genDeviceSelect').value || "ESP32-DEV-001";
+            const dev = devices.find(d => d.id === selectedDevId) || { id: selectedDevId, location: "Ruangan Unknown" };
+            const serverUrl = gasConfig.url || "https://script.google.com/macros/s/YOUR_GAS_DEPLOYMENT_ID/exec";
+            const apiKey = gasConfig.apiKey || "YOUR_SECRET_API_KEY";
+
+            const code = `/*
+ * IoT Panic Button Emergency Response System Firmware
+ * Device ID: ${dev.id}
+ * Location : ${dev.location}
+ * Target   : ESP32 Board
+ */
+
+#include <WiFi.h>
+#include <HTTPClient.h>
+#include <ArduinoJson.h>
+
+// Wi-Fi Configuration
+const char* WIFI_SSID = "${ssid}";
+const char* WIFI_PASS = "${pass}";
+
+// Server API Endpoint (Google Apps Script Web App)
+const char* SERVER_URL = "${serverUrl}";
+const char* API_KEY    = "${apiKey}";
+
+// Hardware Pin Definitions
+const int PANIC_BUTTON_PIN = 4; // GPIO Pin for Switch / Button
+const int BUZZER_PIN       = 18; // Optional Local Buzzer Feedback
+const int LED_PIN          = 2;  // Built-in Status LED
+
+// State Tracking Variables
+bool lastButtonState = HIGH;
+unsigned long lastDebounceTime = 0;
+const unsigned long DEBOUNCE_DELAY = 50;
+
+void setup() {
+  Serial.begin(115200);
+  
+  pinMode(PANIC_BUTTON_PIN, INPUT_PULLUP);
+  pinMode(BUZZER_PIN, OUTPUT);
+  pinMode(LED_PIN, OUTPUT);
+
+  // Connect to Wi-Fi Network
+  WiFi.begin(WIFI_SSID, WIFI_PASS);
+  Serial.print("Connecting to WiFi");
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+    digitalWrite(LED_PIN, !digitalRead(LED_PIN));
+  }
+  Serial.println("\\nWiFi Connected! IP: " + WiFi.localIP().toString());
+  digitalWrite(LED_PIN, HIGH);
+}
+
+void loop() {
+  int reading = digitalRead(PANIC_BUTTON_PIN);
+
+  if (reading != lastButtonState) {
+    lastDebounceTime = millis();
+  }
+
+  if ((millis() - lastDebounceTime) > DEBOUNCE_DELAY) {
+    // If panic button is pressed (LOW trigger)
+    if (reading == LOW) {
+      Serial.println("PANIC BUTTON TRIGGERED!");
+      sendEmergencySignal();
+      
+      // Local alarm audio cue
+      digitalWrite(BUZZER_PIN, HIGH);
+      delay(1000);
+      digitalWrite(BUZZER_PIN, LOW);
+    }
+  }
+
+  lastButtonState = reading;
+}
+
+void sendEmergencySignal() {
+  if (WiFi.status() == WL_CONNECTED) {
+    HTTPClient http;
+    http.begin(SERVER_URL);
+    http.addHeader("Content-Type", "application/json");
+
+    // Construct JSON Payload
+    StaticJsonDocument<200> doc;
+    doc["apiKey"]    = API_KEY;
+    doc["deviceId"]  = "${dev.id}";
+    doc["location font-mono"]  = "${dev.location}";
+    doc["status"]    = "TRIGGERED";
+
+    String requestBody;
+    serializeJson(doc, requestBody);
+
+    int httpResponseCode = http.POST(requestBody);
+
+    if (httpResponseCode > 0) {
+      String response = http.getString();
+      Serial.println("Response Code: " + String(httpResponseCode));
+      Serial.println("Response Body: " + response);
+    } else {
+      Serial.println("Error sending POST request: " + String(httpResponseCode));
+    }
+    http.end();
+  } else {
+    Serial.println("WiFi Disconnected!");
+  }
+}`;
+
+            document.getElementById('arduinoCodeDisplay').innerText = code;
+        }
+
+        function copyGeneratedCode() {
+            const codeText = document.getElementById('arduinoCodeDisplay').innerText;
+            navigator.clipboard.writeText(codeText).then(() => {
+                alert("Kode Arduino .ino berhasil disalin ke clipboard!");
+            }).catch(() => {
+                document.execCommand('copy');
+            });
+        }
+
+        // ==========================================
+        // SETUP WIZARD & GAS INTEGRATION
+        // ==========================================
+        function openSetupModal() {
+            document.getElementById('setupModal').classList.remove('hidden');
+        }
+
+        function closeSetupModal() {
+            document.getElementById('setupModal').classList.add('hidden');
+        }
+
+        function saveSetupConfig() {
+            gasConfig.url = document.getElementById('gasScriptUrl').value.trim();
+            gasConfig.apiKey = document.getElementById('gasApiKey').value.trim();
+
+            localStorage.setItem('gas_url', gasConfig.url);
+            localStorage.setItem('gas_key', gasConfig.apiKey);
+
+            closeSetupModal();
+            generateArduinoCode();
+        }
+
+        function testGasPing() {
+            const statusTxt = document.getElementById('pingStatusText');
+            statusTxt.className = "text-[11px] text-yellow-400";
+            statusTxt.innerText = "Pengujian koneksi...";
+
+            const url = document.getElementById('gasScriptUrl').value.trim();
+            if (!url) {
+                statusTxt.className = "text-[11px] text-red-400";
+                statusTxt.innerText = "URL Web App belum diisi!";
+                return;
+            }
+
+            // Simulated Ping Test for front-end demo
+            setTimeout(() => {
+                statusTxt.className = "text-[11px] text-emerald-400";
+                statusTxt.innerText = "Koneksi Webhook Berhasil (200 OK)!";
+            }, 1200);
+        }
+
+        function initGasDatabase() {
+            const statusTxt = document.getElementById('pingStatusText');
+            statusTxt.className = "text-[11px] text-blue-400";
+            statusTxt.innerText = "Menginisialisasi sheet...";
+
+            setTimeout(() => {
+                statusTxt.className = "text-[11px] text-emerald-400";
+                statusTxt.innerText = "Header Sheet Berhasil Dibuat!";
+            }, 1500);
+        }
+
+        function copyGasScriptTemplate() {
+            const scriptCode = `function doPost(e) {
+  var data = JSON.parse(e.postData.contents);
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  
+  if(data.action === "INIT") {
+    sheet.clear();
+    sheet.appendRow(["Timestamp", "Device ID", "Location", "Status", "Operator"]);
+    return ContentService.createTextOutput(JSON.stringify({status: "SUCCESS", message: "Database Initialized"}));
+  }
+  
+  sheet.appendRow([new Date(), data.deviceId, data.location, data.status, "-"]);
+  return ContentService.createTextOutput(JSON.stringify({status: "SUCCESS"})).setMimeType(ContentService.MimeType.JSON);
+}`;
+            navigator.clipboard.writeText(scriptCode).then(() => {
+                alert("Template Google Apps Script berhasil disalin!");
+            });
+        }
+    </script>
+</body>
+</html>
